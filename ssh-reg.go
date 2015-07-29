@@ -11,13 +11,14 @@ import (
 )
 
 var (
-	host         = kingpin.Arg("host", "The name of the host").Required().String()
+	host         = kingpin.Arg("host", "The name of the host").String()
 	hostName     = kingpin.Arg("hostname", "The HostName of the specified host").String()
 	remove       = kingpin.Flag("remove", "Sest to remove the specified host").Bool()
 	identityFile = kingpin.Flag("identity", "The location of the hosts private key").Default("").Short('i').String()
 	user         = kingpin.Flag("user", "The SSH User").Default("").Short('u').String()
 	force        = kingpin.Flag("force", "Overwrite the specified host").Bool()
 	update       = kingpin.Flag("update", "Update the specified host").Bool()
+	list         = kingpin.Flag("list", "List the available hosts").Short('l').Bool()
 )
 
 var ssh_config string
@@ -32,7 +33,9 @@ func main() {
 	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_APPEND, 0777)
 
 	hostExists := searchHost(*host)
-	if hostExists {
+	if *list {
+		listHosts()
+	} else if hostExists {
 		if *force {
 			removeHost(*host)
 			addHost(*host, *hostName, *identityFile, *user)
@@ -42,6 +45,7 @@ func main() {
 			removeHost(*host)
 		} else {
 			fmt.Println("Host exists, use --force to overwrite.")
+			kingpin.Usage()
 		}
 	} else {
 		addHost(*host, *hostName, *identityFile, *user)
@@ -61,6 +65,20 @@ func searchHost(host string) bool {
 		}
 	}
 	return false
+}
+
+func listHosts() {
+	regex, _ := regexp.Compile(`^Host (.+)$`)
+
+	input, _ := ioutil.ReadFile(ssh_config)
+	lines := strings.Split(string(input), "\n")
+
+	for _, line := range lines {
+		if regex.MatchString(line) {
+			match := regex.FindStringSubmatch(line)
+			fmt.Println(fmt.Sprintf("%v", match[1]))
+		}
+	}
 }
 
 func addHost(host string, hostName string, identityFile string, user string) {
