@@ -1,12 +1,13 @@
 package main
 
 import (
-	"bufio"
 	"fmt"
 	"gopkg.in/alecthomas/kingpin.v2"
+	"io/ioutil"
 	"os"
 	User "os/user"
 	"regexp"
+	"strings"
 )
 
 var (
@@ -20,63 +21,54 @@ var (
 )
 
 var ssh_config string
-var fh *os.File
 
 func main() {
-	kingpin.Version("0.0.1")
+	kingpin.Version("0.0.2")
 	kingpin.Parse()
 
 	usr, _ := User.Current()
 	dir := usr.HomeDir
-	ssh_config = dir + "/configtest"
-	fh, _ = os.OpenFile(ssh_config, os.O_RDWR, 0777)
+	ssh_config = dir + "/.ssh/config"
+	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_APPEND, 0777)
 
 	hostExists := searchHost(*host)
-	// logic here should be cleaned up. Probably check 'remove' first, then update, then force
 	if hostExists {
 		if *force {
-			// Remove host and re-add it.
 			removeHost(*host)
 			addHost(*host, *hostName, *identityFile, *user)
 		} else if *update {
-			// Update host with whatever new values, keeping untouched values.
 			updateHost(*host, *hostName, *identityFile, *user)
 		} else if *remove {
-			// Remove host entirely
 			removeHost(*host)
 		} else {
 			fmt.Println("Host exists, use --force to overwrite.")
 		}
 	} else {
-		// Add host
 		addHost(*host, *hostName, *identityFile, *user)
 	}
 	defer fh.Close()
 }
 
 func searchHost(host string) bool {
-	regex, err := regexp.Compile(fmt.Sprintf("^Host %v$", host))
-	if err != nil {
-		return false
-	}
+	regex, _ := regexp.Compile(fmt.Sprintf("^Host %v$", host))
 
-	f := bufio.NewReader(fh)
+	input, _ := ioutil.ReadFile(ssh_config)
+	lines := strings.Split(string(input), "\n")
 
-	buf := make([]byte, 1024)
-	for {
-		buf, _, err = f.ReadLine()
-		if err != nil {
-			return false
-		}
-
-		s := string(buf)
-		if regex.MatchString(s) {
+	for _, line := range lines {
+		if regex.MatchString(line) {
 			return true
 		}
 	}
+	return false
 }
 
 func addHost(host string, hostName string, identityFile string, user string) {
+	if hostName == "" {
+		kingpin.Usage()
+		return
+	}
+	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_APPEND, 0777)
 	fh.WriteString(fmt.Sprintf("Host %v\n", host))
 	fh.WriteString(fmt.Sprintf("  HostName %v\n", hostName))
 	if identityFile != "" {
@@ -86,6 +78,7 @@ func addHost(host string, hostName string, identityFile string, user string) {
 		fh.WriteString(fmt.Sprintf("  User %v\n", user))
 	}
 	fh.WriteString("\n")
+	defer fh.Close()
 }
 
 func updateHost(host string, hostName string, identityFile string, user string) {
@@ -93,5 +86,25 @@ func updateHost(host string, hostName string, identityFile string, user string) 
 }
 
 func removeHost(host string) {
+	hostRegex, _ := regexp.Compile(fmt.Sprintf("^Host %v$", host))
+	regex, _ := regexp.Compile("^Host .+$")
+	input, _ := ioutil.ReadFile(ssh_config)
+	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_TRUNC, 0777)
+	lines := strings.Split(string(input), "\n")
 
+	for i := 0; i < len(lines); i++ {
+		if hostRegex.MatchString(lines[i]) {
+			for k := i + 1; k < len(lines); k++ {
+				i++
+				if regex.MatchString(lines[k]) {
+					fh.WriteString(fmt.Sprintf("%v\n", lines[k]))
+					break
+				}
+			}
+		} else {
+			fh.WriteString(fmt.Sprintf("%v\n", lines[i]))
+		}
+	}
+
+	defer fh.Close()
 }
