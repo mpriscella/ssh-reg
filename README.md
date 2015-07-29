@@ -1,4 +1,4 @@
-# reg
+# ssh-reg
 
 ````
 usage: ssh-reg [<flags>] <host> [<hostname>]
