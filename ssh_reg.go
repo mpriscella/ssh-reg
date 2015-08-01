@@ -18,6 +18,10 @@ var (
 	describe     = app.Command("describe", "Describe host")
 	describeHost = describe.Arg("host", "The name of the host").Required().String()
 
+	copy        = app.Command("copy", "Copy host")
+	copyHost    = copy.Arg("host", "The name of the host").Required().String()
+	copyNewHost = copy.Arg("newHost", "The name of the new host").Required().String()
+
 	add             = app.Command("add", "Add host")
 	addHost         = add.Arg("host", "The name of the host").Required().String()
 	addHostName     = add.Arg("hostname", "The HostName of the specified host").Required().String()
@@ -67,6 +71,17 @@ func main() {
 			app.Usage(os.Args[1:])
 		}
 		break
+	case copy.FullCommand():
+		_, exists := entries[*copyHost]
+		if exists {
+			entry := entries[*copyHost]
+			entries[*copyNewHost] = Host{Host: *copyNewHost, HostName: entry.HostName, IdentityFile: entry.IdentityFile, User: entry.User}
+			_saveEntries()
+		} else {
+			fmt.Println(fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *copyHost))
+			app.Usage(os.Args[1:])
+		}
+		break
 	case add.FullCommand():
 		_, exists := entries[*addHost]
 		if exists {
@@ -85,6 +100,7 @@ func main() {
 		_, exists := entries[*removeHost]
 		if exists {
 			delete(entries, *removeHost)
+			_saveEntries()
 		} else {
 			fmt.Println(fmt.Printf("ssh-reg: Host '%v' doesn't exist.", *removeHost))
 			app.Usage(os.Args[1:])
