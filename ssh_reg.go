@@ -49,7 +49,7 @@ func main() {
 	kingpin.Version("0.5.0")
 	usr, _ := User.Current()
 	dir := usr.HomeDir
-	ssh_config = dir + "/configtest"
+	ssh_config = dir + "/.ssh/config"
 	input, _ := ioutil.ReadFile(ssh_config)
 	entries = make(map[string]Host)
 	_parseConfig(string(input))
