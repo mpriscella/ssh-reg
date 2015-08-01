@@ -17,6 +17,10 @@ Commands:
     List all available hosts
 
 
+  describe <host>
+    Describe host
+
+
   add [<flags>] <host> <hostname>
     Add host
 
