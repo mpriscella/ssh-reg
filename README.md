@@ -2,7 +2,7 @@
 An SSH config management tool written in go.
 
 # Installation
-Download the compiled [binary](https://github.com/mpriscella/ssh-reg/releases/download/v0.5.1/ssh-reg) to a directory in your $PATH (like `/usr/local/bin`).
+Download the compiled [binary](https://github.com/mpriscella/ssh-reg/releases/download/v0.5.2/ssh-reg) to a directory in your $PATH (like `/usr/local/bin`).
 
 # Examples
 `$ ssh-reg add development dev.mpriscella.com -i ~/.ssh/id_rsa -u mpriscella`
@@ -42,6 +42,10 @@ Commands:
 
   describe <host>
     Describe host
+
+
+  copy <host> <newHost>
+    Copy host
 
 
   add [<flags>] <host> <hostname>
