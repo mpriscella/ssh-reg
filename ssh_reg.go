@@ -31,34 +31,50 @@ var (
 	update             = app.Command("update", "Update host")
 	updateHost         = update.Arg("host", "The name of the host").Required().String()
 	updateHostName     = update.Arg("hostname", "The HostName of the specified host").Default("").String()
-	updateIdentityFile = update.Flag("identity", "The location of the hosts private key").Default("").Short('i').String()
+	updateIdentityFile = update.Flag("identity", "The location of the hosts private key").Short('i').String()
 	updateUser         = update.Flag("user", "The SSH User").Default("").Short('u').String()
 )
 
 var ssh_config string
+var entries map[string]Host
+
+type Host struct {
+	Host         string
+	HostName     string
+	IdentityFile string
+	User         string
+}
 
 func main() {
-	kingpin.Version("0.0.3")
+	kingpin.Version("0.0.5")
 	usr, _ := User.Current()
 	dir := usr.HomeDir
 	ssh_config = dir + "/configtest"
-	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_APPEND, 0777)
+	input, _ := ioutil.ReadFile(ssh_config)
+	entries = make(map[string]Host)
+	_parseConfig(string(input))
 
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case list.FullCommand():
 		_listHosts()
 		break
 	case describe.FullCommand():
-		_describeHost(*describeHost)
+		_, exists := entries[*describeHost]
+		if exists {
+			fmt.Printf(_printHost(entries[*describeHost]))
+		} else {
+			fmt.Println(fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *describeHost))
+			app.Usage(os.Args[1:])
+		}
 		break
 	case add.FullCommand():
-		hostExists := _searchHost(*addHost)
-		if hostExists {
+		_, exists := entries[*addHost]
+		if exists {
 			if *addForce {
-				_removeHost(*addHost)
+				delete(entries, *addHost)
 				_addHost(*addHost, *addHostName, *addIdentityFile, *addUser)
 			} else {
-				fmt.Println(fmt.Sprintf("Host '%v' already exists. Use --force to overwrite.", *addHost))
+				fmt.Println(fmt.Sprintf("ssh-reg: Host '%v' already exists. Use --force to overwrite.", *addHost))
 				app.Usage(os.Args[1:])
 			}
 		} else {
@@ -66,155 +82,97 @@ func main() {
 		}
 		break
 	case remove.FullCommand():
-		hostExists := _searchHost(*removeHost)
-		if hostExists {
-			_removeHost(*removeHost)
+		_, exists := entries[*removeHost]
+		if exists {
+			delete(entries, *removeHost)
 		} else {
-			fmt.Println(fmt.Printf("Host '%v' doesn't exist.", *removeHost))
+			fmt.Println(fmt.Printf("ssh-reg: Host '%v' doesn't exist.", *removeHost))
 			app.Usage(os.Args[1:])
 		}
 		break
 	case update.FullCommand():
-		hostExists := _searchHost(*updateHost)
-		if hostExists {
+		_, exists := entries[*updateHost]
+		if exists {
 			_updateHost(*updateHost, *updateHostName, *updateIdentityFile, *updateUser)
 		} else {
-			fmt.Println(fmt.Printf("Host '%v' doesn't exist.", *updateHost))
+			fmt.Println(fmt.Printf("ssh-reg: Host '%v' doesn't exist.", *updateHost))
 			app.Usage(os.Args[1:])
 		}
 		break
 	}
-
-	defer fh.Close()
 }
 
-func _searchHost(host string) bool {
-	regex, _ := regexp.Compile(fmt.Sprintf("^Host %v$", host))
+func _parseConfig(input string) {
+	regex, _ := regexp.Compile("Host (.+)\\s+HostName (.+)\\s+((IdentityFile|User) (.+)\\s+)?((IdentityFile|User) (.+)\\s+)?")
+	matches := regex.FindAllStringSubmatch(string(input), -1)
 
-	input, _ := ioutil.ReadFile(ssh_config)
-	lines := strings.Split(string(input), "\n")
-
-	for _, line := range lines {
-		if regex.MatchString(line) {
-			return true
+	for _, match := range matches {
+		output := Host{Host: match[1], HostName: match[2]}
+		switch match[4] {
+		case "IdentityFile":
+			output.IdentityFile = match[5]
+			break
+		case "User":
+			output.User = match[5]
+			break
 		}
+		switch match[7] {
+		case "IdentityFile":
+			output.IdentityFile = match[8]
+			break
+		case "User":
+			output.User = match[8]
+			break
+		}
+		entries[match[1]] = output
 	}
-	return false
 }
 
 func _listHosts() {
-	regex, _ := regexp.Compile(`^Host (.+)$`)
-
+	regex, _ := regexp.Compile(`Host (.+)`)
 	input, _ := ioutil.ReadFile(ssh_config)
-	lines := strings.Split(string(input), "\n")
+	match := regex.FindAllStringSubmatch(string(input), -1)
 
-	for _, line := range lines {
-		if regex.MatchString(line) {
-			match := regex.FindStringSubmatch(line)
-			fmt.Println(fmt.Sprintf("%v", match[1]))
-		}
+	for _, host := range match {
+		fmt.Println(fmt.Sprintf("%v", host[1]))
 	}
 }
 
-func _describeHost(host string) {
-	// describeRegex := `Host %v
-	// HostName (.+)
-	// IdentityFile (.+)
-	// (User (.+))?`
-
-	hostRegex, _ := regexp.Compile(fmt.Sprintf("^Host %v$", host))
-	input, _ := ioutil.ReadFile(ssh_config)
-	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_TRUNC, 0777)
-	lines := strings.Split(string(input), "\n")
-
-	for i := 0; i < len(lines); i++ {
-		if hostRegex.MatchString(lines[i]) {
-			fh.WriteString(fmt.Sprintf("%v\n", lines[i]))
-		}
+func _printHost(host Host) string {
+	hostTemplate := []string{fmt.Sprintf("Host %v\n", host.Host), fmt.Sprintf("  HostName %v\n", host.HostName)}
+	if host.IdentityFile != "" {
+		hostTemplate = append(hostTemplate, fmt.Sprintf("  IdentityFile %v\n", host.IdentityFile))
 	}
-
-	defer fh.Close()
+	if host.User != "" {
+		hostTemplate = append(hostTemplate, fmt.Sprintf("  User %v\n", host.User))
+	}
+	return strings.Join(hostTemplate, "")
 }
 
 func _addHost(host string, hostName string, identityFile string, user string) {
-	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_APPEND, 0777)
-	fh.WriteString(fmt.Sprintf("Host %v\n", host))
-	fh.WriteString(fmt.Sprintf("  HostName %v\n", hostName))
-	if identityFile != "" {
-		fh.WriteString(fmt.Sprintf("  IdentityFile %v\n", identityFile))
-	}
-	if user != "" {
-		fh.WriteString(fmt.Sprintf("  User %v\n", user))
-	}
-	fh.WriteString("\n")
-	defer fh.Close()
+	entries[host] = Host{Host: host, HostName: hostName, IdentityFile: identityFile, User: user}
+	_saveEntries()
 }
 
 func _updateHost(host string, hostName string, identityFile string, user string) {
-	regex, _ := regexp.Compile(fmt.Sprintf("^Host %v$", host))
-	hostRegex, _ := regexp.Compile("^Host .+$")
-	hostNameRegex, _ := regexp.Compile("^HostName .+$")
-	identityFileRegex, _ := regexp.Compile("^IdentityFile .+$")
-	userRegex, _ := regexp.Compile("^User .+$")
-
-	input, _ := ioutil.ReadFile(ssh_config)
-	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_TRUNC, 0777)
-	lines := strings.Split(string(input), "\n")
-
-	for i := 0; i < len(lines); i++ {
-		if regex.MatchString(lines[i]) {
-			fh.WriteString(fmt.Sprintf("Host %v\n", host))
-			for k := i + 1; k < len(lines); k++ {
-				i++
-				if hostNameRegex.MatchString(lines[k]) {
-					if hostName != "" {
-						fh.WriteString(fmt.Sprintf("  HostName %v", hostName))
-					} else {
-						fh.WriteString(fmt.Sprintf("%v\n", lines[k]))
-					}
-				}
-				if identityFile != "" {
-					if identityFileRegex.MatchString(lines[k]) {
-						fh.WriteString(fmt.Sprintf("  IdentityFile %v", identityFile))
-					}
-				}
-				if user != "" {
-					if userRegex.MatchString(lines[k]) {
-						fh.WriteString(fmt.Sprintf("  User %v", user))
-					}
-				}
-				if hostRegex.MatchString(lines[k]) {
-					break
-				}
-			}
-		} else {
-			fh.WriteString(fmt.Sprintf("%v\n", lines[i]))
-		}
+	entry := entries[host]
+	if hostName != "" {
+		entry.HostName = hostName
 	}
-
-	defer fh.Close()
+	if identityFile != "" {
+		entry.IdentityFile = identityFile
+	}
+	if user != "" {
+		entry.User = user
+	}
+	entries[host] = entry
+	_saveEntries()
 }
 
-func _removeHost(host string) {
-	hostRegex, _ := regexp.Compile(fmt.Sprintf("^Host %v$", host))
-	regex, _ := regexp.Compile("^Host .+$")
-	input, _ := ioutil.ReadFile(ssh_config)
+func _saveEntries() {
 	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_TRUNC, 0777)
-	lines := strings.Split(string(input), "\n")
 
-	for i := 0; i < len(lines); i++ {
-		if hostRegex.MatchString(lines[i]) {
-			for k := i + 1; k < len(lines); k++ {
-				i++
-				if regex.MatchString(lines[k]) {
-					fh.WriteString(fmt.Sprintf("%v\n", lines[k]))
-					break
-				}
-			}
-		} else {
-			fh.WriteString(fmt.Sprintf("%v\n", lines[i]))
-		}
+	for _, entry := range entries {
+		fh.WriteString(fmt.Sprintf("%v\n", _printHost(entry)))
 	}
-
-	defer fh.Close()
 }
