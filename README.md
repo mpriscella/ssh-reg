@@ -48,6 +48,10 @@ Commands:
     Copy host
 
 
+  move <host> <newHost>
+    Rename host
+
+
   add [<flags>] <host> <hostname>
     Add host
 
