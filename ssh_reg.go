@@ -22,6 +22,10 @@ var (
 	copyHost    = copy.Arg("host", "The name of the host").Required().String()
 	copyNewHost = copy.Arg("newHost", "The name of the new host").Required().String()
 
+	move        = app.Command("move", "Rename host")
+	moveHost    = move.Arg("host", "The name of the host").Required().String()
+	moveNewHost = move.Arg("newHost", "The name of the new host").Required().String()
+
 	add             = app.Command("add", "Add host")
 	addHost         = add.Arg("host", "The name of the host").Required().String()
 	addHostName     = add.Arg("hostname", "The HostName of the specified host").Required().String()
@@ -50,7 +54,7 @@ type Host struct {
 }
 
 func main() {
-	kingpin.Version("0.5.0")
+	kingpin.Version("0.5.3")
 	usr, _ := User.Current()
 	dir := usr.HomeDir
 	ssh_config = dir + "/.ssh/config"
@@ -79,6 +83,17 @@ func main() {
 			_saveEntries()
 		} else {
 			fmt.Println(fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *copyHost))
+			app.Usage(os.Args[1:])
+		}
+		break
+	case move.FullCommand():
+		_, exists := entries[*moveHost]
+		if exists {
+			entry := entries[*moveHost]
+			entries[*moveHost] = Host{Host: *moveNewHost, HostName: entry.HostName, IdentityFile: entry.IdentityFile, User: entry.User}
+			_saveEntries()
+		} else {
+			fmt.Println(fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *moveHost))
 			app.Usage(os.Args[1:])
 		}
 		break
