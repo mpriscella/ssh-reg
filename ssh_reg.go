@@ -7,6 +7,7 @@ import (
 	"os"
 	User "os/user"
 	"regexp"
+	"sort"
 	"strings"
 )
 
@@ -54,7 +55,7 @@ type Host struct {
 }
 
 func main() {
-	kingpin.Version("0.5.3")
+	kingpin.Version("0.5.4")
 	usr, _ := User.Current()
 	dir := usr.HomeDir
 	ssh_config = dir + "/.ssh/config"
@@ -160,12 +161,13 @@ func _parseConfig(input string) {
 }
 
 func _listHosts() {
-	regex, _ := regexp.Compile(`Host (.+)`)
-	input, _ := ioutil.ReadFile(ssh_config)
-	match := regex.FindAllStringSubmatch(string(input), -1)
-
-	for _, host := range match {
-		fmt.Println(fmt.Sprintf("%v", host[1]))
+	var keys []string
+	for k := range entries {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fmt.Println(fmt.Sprintf("%v", k))
 	}
 }
 
@@ -203,7 +205,12 @@ func _updateHost(host string, hostName string, identityFile string, user string)
 func _saveEntries() {
 	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_TRUNC, 0777)
 
-	for _, entry := range entries {
-		fh.WriteString(fmt.Sprintf("%v\n", _printHost(entry)))
+	var keys []string
+	for k := range entries {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	for _, k := range keys {
+		fh.WriteString(fmt.Sprintf("%v\n", _printHost(entries[k])))
 	}
 }
