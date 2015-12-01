@@ -48,6 +48,7 @@ var (
 
 var ssh_config string
 var entries map[string]Host
+var context kingpin.ParseContext
 
 type Host struct {
 	Host         string
@@ -58,13 +59,16 @@ type Host struct {
 }
 
 func main() {
-	kingpin.Version("1.0.0")
+	app.Version("1.0.0")
+	app.Author("Mike Priscella")
+
 	usr, _ := User.Current()
 	dir := usr.HomeDir
 	ssh_config = dir + "/.ssh/config"
 	input, _ := ioutil.ReadFile(ssh_config)
 	entries = make(map[string]Host)
 	parseConfig(string(input))
+	context, _ := app.ParseContext(os.Args[1:])
 
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case add.FullCommand():
@@ -74,7 +78,7 @@ func main() {
 				delete(entries, *addHost)
 				addEntry(*addHost, *addHostName, *addIdentityFile, *addUser, *addExtra)
 			} else {
-				exitWithMessage(fmt.Sprintf("ssh-reg: Host '%v' already exists. Use --force to overwrite.", *addHost))
+				app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' already exists. Use --force to overwrite.", *addHost))
 			}
 		} else {
 			addEntry(*addHost, *addHostName, *addIdentityFile, *addUser, *addExtra)
@@ -87,7 +91,7 @@ func main() {
 			entries[*copyNewHost] = Host{Host: *copyNewHost, HostName: entry.HostName, IdentityFile: entry.IdentityFile, User: entry.User}
 			saveEntries()
 		} else {
-			exitWithMessage(fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *copyHost))
+			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *copyHost))
 		}
 		break
 	case describe.FullCommand():
@@ -95,7 +99,7 @@ func main() {
 		if exists {
 			fmt.Printf(printEntry(entries[*describeHost]))
 		} else {
-			exitWithMessage(fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *describeHost))
+			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *describeHost))
 		}
 		break
 	case list.FullCommand():
@@ -109,7 +113,7 @@ func main() {
 			delete(entries, *moveHost)
 			saveEntries()
 		} else {
-			exitWithMessage(fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *moveHost))
+			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *moveHost))
 		}
 		break
 	case remove.FullCommand():
@@ -118,7 +122,7 @@ func main() {
 			delete(entries, *removeHost)
 			saveEntries()
 		} else {
-			exitWithMessage(fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *removeHost))
+			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *removeHost))
 		}
 		break
 	case update.FullCommand():
@@ -126,7 +130,7 @@ func main() {
 		if exists {
 			updateEntry(*updateHost, *updateHostName, *updateIdentityFile, *updateUser, *updateExtra)
 		} else {
-			exitWithMessage(fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *updateHost))
+			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *updateHost))
 		}
 		break
 	}
@@ -180,7 +184,7 @@ func validateExtras(input []string) bool {
 	for _, extra := range input {
 		keyword := strings.Split(extra, "=")
 		if !stringInSlice(keyword[0], valid_keywords) {
-			exitWithMessage(fmt.Sprintf("Invalid Keyword: %s", keyword[0]))
+			app.FatalUsageContext(*context, fmt.Sprintf("Invalid Keyword: %s", keyword[0]))
 			return false
 		}
 	}
@@ -281,9 +285,4 @@ func saveEntries() {
 	for _, k := range keys {
 		fh.WriteString(fmt.Sprintf("%v\n", printEntry(entries[k])))
 	}
-}
-
-func exitWithMessage(message string) {
-	fmt.Println(message)
-	app.Usage(os.Args[1:])
 }
