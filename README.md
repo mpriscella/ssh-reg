@@ -5,7 +5,7 @@ An SSH config management tool written in go.
 Download the compiled [binary](https://github.com/mpriscella/ssh-reg/releases/download/v0.5.4/ssh-reg) to a directory in your $PATH (like `/usr/local/bin`).
 
 # Examples
-`$ ssh-reg add development dev.mpriscella.com -i ~/.ssh/id_rsa -u mpriscella`
+`$ ssh-reg add development dev.mpriscella.com -i ~/.ssh/id_rsa -u mpriscella -e "Port=8989"`
 
 ```
 $ ssh-reg describe development
@@ -13,10 +13,11 @@ $ ssh-reg describe development
 >   HostName dev.mpriscella.com
 >   IdentityFile /home/mpriscella/.ssh/id_rsa
 >   User mpriscella
+>   Port 8989
 ```
 
 ```
-$ ssh-reg update development staging.mpriscella.com
+$ ssh-reg update development staging.mpriscella.com -e "Port="
 > Host development
 >   HostName staging.mpriscella.com
 >   IdentityFile /home/mpriscella/.ssh/id_rsa
@@ -26,48 +27,49 @@ $ ssh-reg update development staging.mpriscella.com
 ````
 usage: ssh-reg [<flags>] <command> [<args> ...]
 
-A ssh config management tool.
+ssh-reg is a program to manage a user's ssh config file.
 
 Flags:
-  --help  Show help (also see --help-long and --help-man).
+  --help     Show context-sensitive help (also try --help-long and --help-man).
+  --version  Show application version.
 
 Commands:
   help [<command>...]
     Show help.
 
 
-  list
-    List all available hosts
+  add [<flags>] <host> <hostname>
+    Add host entry.
+
+    -i, --identity=IDENTITY  The path to the identity key file.
+    -u, --user=USER          The SSH user.
+    -f, --force              Overwrite the specified host.
+    -e, --extra=EXTRA        Add Extra Keyword.
+
+  copy <source> <destination>
+    Copy host entry.
 
 
   describe <host>
-    Describe host
+    Describe host entry.
 
 
-  copy <host> <newHost>
-    Copy host
+  list
+    List all available host entries.
 
 
-  move <host> <newHost>
-    Rename host
+  move <source> <destination>
+    Rename host entry.
 
-
-  add [<flags>] <host> <hostname>
-    Add host
-
-    -i, --identity=IDENTITY
-                     The location of the hosts private key
-    -u, --user=USER  The SSH User
-    -f, --force      Overwrite the specified host
 
   remove <host>
-    Remove host
+    Remove host entry.
 
 
   update [<flags>] <host> [<hostname>]
-    Update host
+    Update host entry.
 
-    -i, --identity=IDENTITY
-                     The location of the hosts private key
-    -u, --user=USER  The SSH User
+    -i, --identity=IDENTITY  The path to the identity key file.
+    -u, --user=USER          The SSH User.
+    -e, --extra=EXTRA        Keyword=Value.
 ````
