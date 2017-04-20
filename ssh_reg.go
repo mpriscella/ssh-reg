@@ -59,7 +59,7 @@ type Host struct {
 }
 
 func main() {
-	app.Version("1.0.0")
+	app.Version("1.1.0")
 	app.Author("Mike Priscella")
 
 	usr, _ := User.Current()
