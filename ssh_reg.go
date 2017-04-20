@@ -48,7 +48,7 @@ var (
 
 var ssh_config string
 var entries map[string]Host
-var context kingpin.ParseContext
+var context *kingpin.ParseContext
 
 type Host struct {
 	Host         string
@@ -184,7 +184,7 @@ func validateExtras(input []string) bool {
 	for _, extra := range input {
 		keyword := strings.Split(extra, "=")
 		if !stringInSlice(keyword[0], valid_keywords) {
-			app.FatalUsageContext(*context, fmt.Sprintf("Invalid Keyword: %s", keyword[0]))
+			app.FatalUsageContext(context, fmt.Sprintf("Invalid Keyword: %s", keyword[0]))
 			return false
 		}
 	}
