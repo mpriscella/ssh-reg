@@ -103,7 +103,7 @@ func main() {
 		}
 		break
 	case list.FullCommand():
-		listHosts()
+		listEntries()
 		break
 	case move.FullCommand():
 		_, exists := entries[*moveHost]
@@ -200,7 +200,7 @@ func stringInSlice(str string, list []string) bool {
 	return false
 }
 
-func listHosts() {
+func listEntries() {
 	var keys []string
 	for k := range entries {
 		keys = append(keys, k)
