@@ -2,17 +2,19 @@ package main
 
 import (
 	"fmt"
-	"gopkg.in/alecthomas/kingpin.v2"
 	"io/ioutil"
 	"os"
-	User "os/user"
+	"os/user"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
+
+	"gopkg.in/alecthomas/kingpin.v2"
 )
 
 var (
-	app = kingpin.New("ssh-reg", "\033[1mssh-reg\033[0m is a program to manage a user's ssh config file.")
+	app = kingpin.New("ssh-reg", "ssh-reg is a program to manage a user's ssh config file.")
 
 	add             = app.Command("add", "Add host entry.")
 	addHost         = add.Arg("host", "The name of the host to add.").Required().String()
@@ -46,11 +48,11 @@ var (
 	updateExtra        = update.Flag("extra", "Keyword=Value.").Short('e').String()
 )
 
-var ssh_config string
-var entries map[string]Host
+var sshConfig string
+var entries map[string]host
 var context *kingpin.ParseContext
 
-type Host struct {
+type host struct {
 	Host         string
 	HostName     string
 	IdentityFile string
@@ -59,87 +61,102 @@ type Host struct {
 }
 
 func main() {
-	app.Version("1.1.0")
-	app.Author("Mike Priscella")
+	app.Version("1.1.1")
+	app.Author("Mike Priscella & Dario Castañé")
 
-	usr, _ := User.Current()
+	usr, err := user.Current()
+	if err != nil {
+		panic(err)
+	}
 	dir := usr.HomeDir
-	ssh_config = dir + "/.ssh/config"
-	input, _ := ioutil.ReadFile(ssh_config)
-	entries = make(map[string]Host)
-	parseConfig(string(input))
-	context, _ := app.ParseContext(os.Args[1:])
+	sshConfig = dir + filepath.FromSlash("/.ssh/config")
+	entries = make(map[string]host)
+	if _, err := os.Stat(sshConfig); err == nil {
+		input, err := ioutil.ReadFile(sshConfig)
+		if err != nil {
+			panic(err)
+		}
+		err = parseConfig(string(input))
+		if err != nil {
+			panic(err)
+		}
+	} else {
+		if !os.IsNotExist(err) {
+			panic(err)
+		}
+	}
+
+	context, err := app.ParseContext(os.Args[1:])
+	if err != nil {
+		panic(err)
+	}
 
 	switch kingpin.MustParse(app.Parse(os.Args[1:])) {
 	case add.FullCommand():
-		_, exists := entries[*addHost]
-		if exists {
+		if _, exists := entries[*addHost]; exists {
 			if *addForce {
 				delete(entries, *addHost)
-				addEntry(*addHost, *addHostName, *addIdentityFile, *addUser, *addExtra)
+				err = addEntry(*addHost, *addHostName, *addIdentityFile, *addUser, *addExtra)
 			} else {
-				app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' already exists. Use --force to overwrite.", *addHost))
+				app.FatalUsageContext(context, fmt.Sprintf("Host '%v' already exists. Use --force to overwrite.", *addHost))
 			}
 		} else {
-			addEntry(*addHost, *addHostName, *addIdentityFile, *addUser, *addExtra)
+			err = addEntry(*addHost, *addHostName, *addIdentityFile, *addUser, *addExtra)
 		}
-		break
 	case copy.FullCommand():
-		_, exists := entries[*copyHost]
-		if exists {
+		if _, exists := entries[*copyHost]; exists {
 			entry := entries[*copyHost]
-			entries[*copyNewHost] = Host{Host: *copyNewHost, HostName: entry.HostName, IdentityFile: entry.IdentityFile, User: entry.User}
+			entries[*copyNewHost] = host{Host: *copyNewHost, HostName: entry.HostName, IdentityFile: entry.IdentityFile, User: entry.User}
 			saveEntries()
 		} else {
-			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *copyHost))
+			app.FatalUsageContext(context, fmt.Sprintf("Host '%v' doesn't exist.", *copyHost))
 		}
-		break
 	case describe.FullCommand():
-		_, exists := entries[*describeHost]
-		if exists {
+		if _, exists := entries[*describeHost]; exists {
 			fmt.Printf(printEntry(entries[*describeHost]))
 		} else {
-			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *describeHost))
+			app.FatalUsageContext(context, fmt.Sprintf("Host '%v' doesn't exist.", *describeHost))
 		}
-		break
 	case list.FullCommand():
 		listEntries()
-		break
 	case move.FullCommand():
-		_, exists := entries[*moveHost]
-		if exists {
+		if _, exists := entries[*moveHost]; exists {
 			entry := entries[*moveHost]
-			entries[*moveNewHost] = Host{Host: *moveNewHost, HostName: entry.HostName, IdentityFile: entry.IdentityFile, User: entry.User}
+			entries[*moveNewHost] = host{Host: *moveNewHost, HostName: entry.HostName, IdentityFile: entry.IdentityFile, User: entry.User}
 			delete(entries, *moveHost)
 			saveEntries()
 		} else {
-			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *moveHost))
+			app.FatalUsageContext(context, fmt.Sprintf("Host '%v' doesn't exist.", *moveHost))
 		}
-		break
 	case remove.FullCommand():
-		_, exists := entries[*removeHost]
-		if exists {
+		if _, exists := entries[*removeHost]; exists {
 			delete(entries, *removeHost)
 			saveEntries()
 		} else {
-			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *removeHost))
+			app.FatalUsageContext(context, fmt.Sprintf("Host '%v' doesn't exist.", *removeHost))
 		}
-		break
 	case update.FullCommand():
-		_, exists := entries[*updateHost]
-		if exists {
+		if _, exists := entries[*updateHost]; exists {
 			updateEntry(*updateHost, *updateHostName, *updateIdentityFile, *updateUser, *updateExtra)
 		} else {
-			app.FatalUsageContext(context, fmt.Sprintf("ssh-reg: Host '%v' doesn't exist.", *updateHost))
+			app.FatalUsageContext(context, fmt.Sprintf("Host '%v' doesn't exist.", *updateHost))
 		}
-		break
+	}
+	if err != nil {
+		panic(err)
 	}
 }
 
-func parseConfig(input string) {
-	entry_regex, _ := regexp.Compile("((.+) (.+)\\s?)+")
-	host_option, _ := regexp.Compile("(?:\\s+)?(.+) (.+)\\s?")
-	matches := entry_regex.FindAllStringSubmatch(string(input), -1)
+func parseConfig(input string) error {
+	entryRegex, err := regexp.Compile("((.+) (.+)\\s?)+")
+	if err != nil {
+		return err
+	}
+	hostOption, err := regexp.Compile("(?:\\s+)?(.+) (.+)\\s?")
+	if err != nil {
+		return err
+	}
+	matches := entryRegex.FindAllStringSubmatch(string(input), -1)
 
 	var hosts []string
 	for i := 0; i < len(matches); i++ {
@@ -148,14 +165,14 @@ func parseConfig(input string) {
 
 	for _, entry := range hosts {
 		options := strings.Split(entry, "\n")
-		output := Host{}
+		output := host{}
 		output.Extras = make(map[string]string)
 
 		for _, option := range options {
 			if len(option) > 1 {
-				option_matches := host_option.FindAllStringSubmatch(option, -1)
-				key := option_matches[0][1]
-				value := option_matches[0][2]
+				optionMatches := hostOption.FindAllStringSubmatch(option, -1)
+				key := optionMatches[0][1]
+				value := optionMatches[0][2]
 				switch key {
 				case "Host":
 					output.Host = value
@@ -177,13 +194,14 @@ func parseConfig(input string) {
 		}
 		entries[output.Host] = output
 	}
+	return nil
 }
 
 func validateExtras(input []string) bool {
-	valid_keywords := extraKeywords()
+	validKeywords := extraKeywords()
 	for _, extra := range input {
 		keyword := strings.Split(extra, "=")
-		if !stringInSlice(keyword[0], valid_keywords) {
+		if !stringInSlice(keyword[0], validKeywords) {
 			app.FatalUsageContext(context, fmt.Sprintf("Invalid Keyword: %s", keyword[0]))
 			return false
 		}
@@ -211,30 +229,30 @@ func listEntries() {
 	}
 }
 
-func printEntry(host Host) string {
-	hostTemplate := []string{fmt.Sprintf("Host %v\n", host.Host), fmt.Sprintf("  HostName %v\n", host.HostName)}
-	if host.IdentityFile != "" {
-		hostTemplate = append(hostTemplate, fmt.Sprintf("  IdentityFile %v\n", host.IdentityFile))
+func printEntry(h host) string {
+	hostTemplate := []string{fmt.Sprintf("Host %v\n", h.Host), fmt.Sprintf("  HostName %v\n", h.HostName)}
+	if h.IdentityFile != "" {
+		hostTemplate = append(hostTemplate, fmt.Sprintf("  IdentityFile %v\n", h.IdentityFile))
 	}
-	if host.User != "" {
-		hostTemplate = append(hostTemplate, fmt.Sprintf("  User %v\n", host.User))
+	if h.User != "" {
+		hostTemplate = append(hostTemplate, fmt.Sprintf("  User %v\n", h.User))
 	}
-	if len(host.Extras) > 0 {
-		for k, v := range host.Extras {
+	if len(h.Extras) > 0 {
+		for k, v := range h.Extras {
 			hostTemplate = append(hostTemplate, fmt.Sprintf("  %v %v\n", k, v))
 		}
 	}
 	return strings.Join(hostTemplate, "")
 }
 
-func addEntry(host string, hostName string, identityFile string, user string, extra string) {
-	entry := Host{Host: host, HostName: hostName, IdentityFile: identityFile, User: user}
+func addEntry(hostID string, hostName string, identityFile string, user string, extra string) error {
+	entry := host{Host: hostID, HostName: hostName, IdentityFile: identityFile, User: user}
 	entry.Extras = make(map[string]string)
 
 	if extra != "" {
-		extra_array := strings.Split(extra, ",")
-		if validateExtras(extra_array) {
-			for _, v := range extra_array {
+		extraArray := strings.Split(extra, ",")
+		if validateExtras(extraArray) {
+			for _, v := range extraArray {
 				option := strings.Split(v, "=")
 				if option[1] != "" {
 					entry.Extras[option[0]] = option[1]
@@ -242,8 +260,8 @@ func addEntry(host string, hostName string, identityFile string, user string, ex
 			}
 		}
 	}
-	entries[host] = entry
-	saveEntries()
+	entries[hostID] = entry
+	return saveEntries()
 }
 
 func updateEntry(host string, hostName string, identityFile string, user string, extra string) {
@@ -258,9 +276,9 @@ func updateEntry(host string, hostName string, identityFile string, user string,
 		entry.User = user
 	}
 	if extra != "" {
-		extra_array := strings.Split(extra, ",")
-		if validateExtras(extra_array) {
-			for _, v := range extra_array {
+		extraArray := strings.Split(extra, ",")
+		if validateExtras(extraArray) {
+			for _, v := range extraArray {
 				option := strings.Split(v, "=")
 				if option[1] != "" {
 					entry.Extras[option[0]] = option[1]
@@ -274,9 +292,11 @@ func updateEntry(host string, hostName string, identityFile string, user string,
 	saveEntries()
 }
 
-func saveEntries() {
-	fh, _ := os.OpenFile(ssh_config, os.O_RDWR|os.O_TRUNC, 0777)
-
+func saveEntries() error {
+	fh, err := os.OpenFile(sshConfig, os.O_RDWR|os.O_CREATE|os.O_TRUNC, 0777)
+	if err != nil {
+		return err
+	}
 	var keys []string
 	for k := range entries {
 		keys = append(keys, k)
@@ -285,4 +305,5 @@ func saveEntries() {
 	for _, k := range keys {
 		fh.WriteString(fmt.Sprintf("%v\n", printEntry(entries[k])))
 	}
+	return nil
 }
