@@ -8,17 +8,17 @@ import (
 
 func TestMain(m *testing.M) {
 	config := "Host dev\n  HostName dev.mpriscella.com\n  IdentityFile ~/.ssh/mpriscella\n  User mpriscella\n\nHost prod\n  HostName mpriscella.com\n  IdentityFile ~/.ssh/mpriscella\n  User mpriscella\n\nHost staging\n  HostName staging.mpriscella.com\n  IdentityFile ~/.ssh/mpriscella\n  User mpriscella\n\n"
-	ssh_config = "test-config"
-	entries = make(map[string]Host)
+	sshConfig = "test-config"
+	entries = make(map[string]host)
 
-	test_config, _ := os.Create(ssh_config)
-	test_config.WriteString(config)
+	testConfig, _ := os.Create(sshConfig)
+	testConfig.WriteString(config)
 
-	input, _ := ioutil.ReadFile(ssh_config)
+	input, _ := ioutil.ReadFile(sshConfig)
 	parseConfig(string(input))
-	exit_status := m.Run()
-	os.Remove(ssh_config)
-	os.Exit(exit_status)
+	exitStatus := m.Run()
+	os.Remove(sshConfig)
+	os.Exit(exitStatus)
 }
 
 func TestParseConfig(t *testing.T) {
